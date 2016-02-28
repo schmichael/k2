@@ -20,33 +20,6 @@ const (
 	RequestTypeOffsets      = 4
 )
 
-const (
-	StatusSuccess          Status = 0
-	StatusInvalidOffset    Status = 1
-	StatusInvalidMessage   Status = 2
-	StatusInvalidPartition Status = 3
-	StatusInvalidFetchSize Status = 4
-)
-
-type Status uint16
-
-type RequestHeader struct {
-	// omitted: uint32 total size
-
-	Type uint16 // 0==produce, 1==fetch, 2==multifetch, 3==multiproduce, 4==offsets
-
-	// omitted: uint16 topic len; the number of chars in the topic name (the next field)
-
-	Topic     string // topic name, without null termination
-	Partition uint32 // partition number to use
-}
-
-type ResponseHeader struct {
-	// omitted: uint32 total size
-
-	Status Status
-}
-
 func handle(c net.Conn) {
 	defer c.Close()
 	cname := c.RemoteAddr()
@@ -101,7 +74,6 @@ func handle(c net.Conn) {
 }
 
 func handleProduce(c net.Conn, topic string, part uint32, reqbuf []byte) error {
-	log.Printf("%s %d %q", topic, part, string(reqbuf))
 	// check invariants; could be skipped
 	msgssz := binary.BigEndian.Uint32(reqbuf[:4])
 	reqbuf = reqbuf[4:]
