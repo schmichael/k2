@@ -7,6 +7,8 @@ import (
 	"io"
 	"log"
 	"net"
+
+	"github.com/schmichael/k2/k2store"
 )
 
 const (
@@ -20,12 +22,8 @@ const (
 	RequestTypeOffsets      = 4
 )
 
-type MessageWriter interface {
-	Write(topic string, partition uint32, message []byte) error
-}
-
 type server struct {
-	w MessageWriter
+	w k2store.MessageWriter
 }
 
 func (s *server) handle(c net.Conn) {
@@ -94,12 +92,12 @@ func (s *server) handleProduce(c net.Conn, topic string, part uint32, reqbuf []b
 		var attrs byte
 
 		msgsz := binary.BigEndian.Uint32(reqbuf[:4])
-		reqbuf = reqbuf[4:]
-		if int(msgsz) > len(reqbuf) {
+		if int(msgsz) > len(reqbuf)-4 {
 			return fmt.Errorf("message size %d with only %d bytes remaining", msgsz, len(reqbuf))
 		}
-		msgbuf := reqbuf[:msgsz]
-		reqbuf = reqbuf[msgsz:]
+		fullmsg := reqbuf[:msgsz+4]
+		msgbuf := reqbuf[4 : msgsz+4]
+		reqbuf = reqbuf[msgsz+4:]
 
 		// check magic
 		switch msgbuf[0] {
@@ -120,7 +118,7 @@ func (s *server) handleProduce(c net.Conn, topic string, part uint32, reqbuf []b
 			return fmt.Errorf("checksum mismatch: client=%d != %d", int32(theirsum), int32(oursum))
 		}
 
-		if err := s.w.Write(topic, part, msgbuf); err != nil {
+		if err := s.w.Write(topic, part, fullmsg); err != nil {
 			return err
 		}
 	}
@@ -131,7 +129,7 @@ func (s *server) handleProduce(c net.Conn, topic string, part uint32, reqbuf []b
 	return nil
 }
 
-func ListenAndServe(nettype, laddr string, w MessageWriter) error {
+func ListenAndServe(nettype, laddr string, w k2store.MessageWriter) error {
 	l, err := net.Listen(nettype, laddr)
 	if err != nil {
 		return err
